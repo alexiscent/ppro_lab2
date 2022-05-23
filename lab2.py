@@ -55,10 +55,14 @@ class CustomExecutor:
         return item.future
 
     def map(self, func, args_array):
-        items = [WorkItem(func, arg) for arg in args_array]
-        [self.queue.put(i) for i in items]
-        self.workers = [WorkerThread(self.queue) for i in range(self.max_workers)]
-        [w.start() for w in self.workers]
+        items = []
+        for arg in args_array:
+            items.append(WorkItem(func, arg))
+            self.queue.put(items[-1])
+        self.workers = []
+        for _ in range(self.max_workers):
+            self.workers.append(WorkerThread(self.queue))
+            self.workers[-1].start()
         return [i.future for i in items]
 
     def shutdown(self):
