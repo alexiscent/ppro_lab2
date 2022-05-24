@@ -34,9 +34,8 @@ class WorkerThread(Thread):
 
     def run(self):
         while True:
-            if self.queue.empty():
-                return
             item = self.queue.get()
+            if not item: return
             res = item.func(item.arg)
             item.future.setResult(res)
 
@@ -44,14 +43,14 @@ class WorkerThread(Thread):
 class CustomExecutor:
     def __init__(self, max_workers=1):
         self.queue = Queue()
-        self.max_workers = max(max_workers, 1)
         self.workers = []
+        for _ in range(max(max_workers, 1)):
+            self.workers.append(WorkerThread(self.queue))
+            self.workers[-1].start()
 
     def execute(self, func, args):
         item = WorkItem(func, args)
         self.queue.put(item)
-        self.workers = [WorkerThread(self.queue)]
-        self.workers[0].start()
         return item.future
 
     def map(self, func, args_array):
@@ -59,13 +58,11 @@ class CustomExecutor:
         for arg in args_array:
             items.append(WorkItem(func, arg))
             self.queue.put(items[-1])
-        self.workers = []
-        for _ in range(self.max_workers):
-            self.workers.append(WorkerThread(self.queue))
-            self.workers[-1].start()
         return [i.future for i in items]
 
     def shutdown(self):
+        for _ in self.workers:
+            self.queue.put(None)
         for w in self.workers:
             w.join()
 
@@ -80,3 +77,4 @@ if __name__ == '__main__':
     futures = executor.map(longRunningTask, [1, 2, 3, 4])
     for f in futures:
         print(strftime('%H:%M:%S') + ' - ' + str(f.result()))
+    executor.shutdown()
